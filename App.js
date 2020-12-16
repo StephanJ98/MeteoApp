@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Platform, Text, View, ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { Platform, Text, View, ScrollView, StyleSheet, RefreshControl, Dimensions } from 'react-native'
 import Constants from 'expo-constants'
 import * as Location from 'expo-location'
 import Header from './components/Header'
@@ -18,39 +18,41 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false)
 
   const onRefresh = useCallback(() => {
-    setRefreshing(true);
-
-    wait(2000).then(() => setRefreshing(false));
+    setRefreshing(true)
+    setErrorMsg(null)
+    getData()
+    wait(2000).then(() => setRefreshing(false))
   }, []);
 
   useEffect(() => {
-    (async () => {
-      if (Platform.OS === 'android' && !Constants.isDevice) {
-        setErrorMsg('Dispositivo no compatible!')
-        return;
-      }
-      let { status } = await Location.requestPermissionsAsync()
-      if (status !== 'granted') {
-        setErrorMsg('Permisos denegados!')
-        return;
-      }
-      let { coords } = await Location.getCurrentPositionAsync({ accuracy: 6 })
-      await setLocation(coords)
-      if (coords !== null && errorMsg === null) {
-        getDataFromOpenWeatherMaps(coords)
-      }
-    })();
+    getData()
   }, []);
+
+  const getData = async () => {
+    if (Platform.OS === 'android' && !Constants.isDevice) {
+      setErrorMsg('Dispositivo no compatible!')
+      return;
+    }
+    let { status } = await Location.requestPermissionsAsync()
+    if (status !== 'granted') {
+      setErrorMsg('Permisos denegados!')
+      return;
+    }
+    let { coords, altitude } = await Location.getCurrentPositionAsync({ accuracy: 6 })
+    await setLocation(coords)
+    if (coords !== null && errorMsg === null) {
+      getDataFromOpenWeatherMaps(coords)
+    }
+  }
 
   const getDataFromOpenWeatherMaps = async (location) => {
     await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${location.latitude}&lon=${location.longitude}&units=metric&appid=fb228059cd79a2e758028fcd08f5d067`)
       .then((response) => response.json())
-      .then((response, json) => {
-        setErrorMsg('El servidor no responde, espere un par de minutos.')
+      .then((json) => {
         setData(json)
       })
       .catch((error) => {
-        setErrorMsg('Error en la recuperación de datos!')
+        setErrorMsg('El servidor no responde, espere un par de minutos.')
       })
   };
 
@@ -58,6 +60,7 @@ export default function App() {
   let [city, temp, tempSensation, humidity, pressure, wind] = ''
   let tempMax = ''
   let tempMin = ''
+  let height = 0
 
   if (errorMsg) {
     text = errorMsg
@@ -72,6 +75,7 @@ export default function App() {
     tempMax = data.main.temp_max
     tempMin = data.main.temp_min
     wind = data.wind.speed
+    height = location.altitude === null ? 0 : location.altitude.toFixed(2)
   }
 
   return (
@@ -87,8 +91,9 @@ export default function App() {
         <ItemsComponent text={'Sensación: '} value={tempSensation} magnitude={'ºC'} />
         <ItemsComponent text={`Max: ${tempMax}ºC | Min: ${tempMin}ºC`} />
         <ItemsComponent text={'Humedad: '} value={humidity} magnitude={'%'} />
-        <ItemsComponent text={'Presion: '} value={pressure} magnitude={'Pa'} />
+        <ItemsComponent text={'Presión: '} value={pressure} magnitude={'Pa'} />
         <ItemsComponent text={'Viento: '} value={wind} magnitude={'m/s'} />
+        <ItemsComponent text={'Altura: '} value={height} magnitude={'m'} />
       </ScrollView>
     </View >
   );
@@ -102,21 +107,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'space-between',
+    height: Dimensions.get('screen').height - 80
   },
 });
-
-/**
- * LocationObject: {
- *  coords : {
- *    latitude
- *    longitude
- *    altitude
- *    accuracy
- *    altitudeAccuracy
- *    heading
- *    speed
- *  }
- *  timestamp
- * }
-*/
